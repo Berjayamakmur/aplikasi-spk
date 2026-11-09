@@ -1,0 +1,25 @@
+CARA MENGGUNAKAN BUATKAN SAYA APLIKASI SPK PEMBUATAN... DI GOOGLE APPS SCRIPT
+
+File dalam ZIP ini:
+- Code.gs      : kode backend Google Apps Script
+- index.html   : tampilan aplikasi web
+
+LANGKAH PEMASANGAN
+1. Buka https://script.google.com dan login dengan akun Google kamu.
+2. Klik New project untuk membuat project Apps Script baru.
+3. Ganti nama file Code.gs bawaan dengan isi file Code.gs dari ZIP ini.
+4. Klik tombol + di sebelah Files, pilih HTML, lalu beri nama index.
+5. Salin isi index.html dari ZIP ke file HTML tersebut.
+6. Klik Save.
+7. Klik Deploy > New deployment.
+8. Pilih type Web app.
+9. Atur Execute as menjadi Me.
+10. Pilih akses sesuai kebutuhan, misalnya Anyone with the link.
+11. Klik Deploy dan izinkan akses Google jika diminta.
+12. Buka Web app URL yang diberikan Google.
+
+CATATAN
+- Nama file harus tetap Code.gs dan index.html (di Apps Script file HTML biasanya tampil sebagai index).
+- Jika aplikasi menggunakan Spreadsheet, pastikan akun yang menjalankan deployment memiliki akses ke Spreadsheet tersebut.
+- Setelah mengubah kode, lakukan deployment versi baru melalui Deploy > Manage deployments.
+- Export ini hanya mengunduh kode. Proses Publish otomatis di ngidengode tetap tersedia sebagai pilihan terpisah.

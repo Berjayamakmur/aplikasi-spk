@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#102b37" />
+  <title>Panelworks — SPK Pembuatan Panel</title>
+  <link rel="icon" href="https://aset.ngidengode.com/ngidengode/aset/cmvn9451e093aqx01mdsu0tlu/5f3fd92a80cabe881e48de1b.webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif']
+          },
+          colors: {
+            ink: '#102b37',
+            teal: { 50: '#effaf8', 100: '#d9f2ed', 500: '#168b7b', 600: '#117767', 700: '#0d6257' },
+            paper: '#f5f7f8'
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.8/babel.min.js"></script>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7f8; color: #142b35; font-family: Inter, sans-serif; }
+    button, input, select, textarea { font: inherit; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 20; vertical-align: middle; }
+    .hero-bg { background: radial-gradient(ellipse at 84% 15%, rgba(73,184,158,.25), transparent 31%), radial-gradient(ellipse at 8% 90%, rgba(33,130,124,.24), transparent 34%), linear-gradient(135deg,#102b37 0%,#123f48 57%,#0d6257 100%); }
+    .login-grid { background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg,rgba(255,255,255,.035) 1px, transparent 1px); background-size: 42px 42px; }
+    .glass { background: rgba(255,255,255,.075); border: 1px solid rgba(255,255,255,.13); backdrop-filter: blur(12px); }
+    .panel-shadow { box-shadow: 0 18px 50px rgba(17,40,50,.07); background-color: rgba(255,255,255,.78); border-color: rgba(255,255,255,.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    .panel-shadow:hover { box-shadow: 0 20px 55px rgba(17,40,50,.10); }
+    aside, header.sticky { background-color: rgba(255,255,255,.86); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+    aside { border-color: rgba(226,232,240,.72); }
+    header.sticky { border-color: rgba(226,232,240,.68); }
+    .fade-in { animation: fadeIn .24s ease-out both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .scrollbar::-webkit-scrollbar { width: 7px; height: 7px; }
+    .scrollbar::-webkit-scrollbar-thumb { background: #d7e1e4; border-radius: 99px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #168b7b !important; box-shadow: 0 0 0 3px rgba(22,139,123,.11); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const serverCall = (method, ...args) => new Promise((resolve, reject) => {
+      const token = localStorage.getItem('panelworks_token') || '';
+      const callArgs = method === 'loginAdmin' ? args : [...args, token];
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[method](...callArgs);
+    });
+
+    const STATUS = ['Baru', 'Proses', 'Selesai', 'Dikirim'];
+    const icon = (name, cls = '') => <span className={`material-symbols-outlined ${cls}`}>{name}</span>;
+    const dateLabel = (value) => {
+      if (!value) return '—';
+      const d = new Date(`${String(value).slice(0,10)}T00:00:00`);
+      return isNaN(d) ? value : new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+    };
+    const initials = (text = '') => text.split(/\s+/).filter(Boolean).slice(0,2).map(s => s[0]).join('').toUpperCase() || 'A';
+
+    function printSPK(detail) {
+      const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+      const h = detail.header;
+      const itemRows = detail.items.map((item, index) => `<tr><td>${String(index + 1).padStart(2, '0')}</td><td>${escapeHtml(item.jenis_panel)}</td><td>${escapeHtml(item.spesifikasi).replace(/\n/g, '<br>')}</td><td class="number">${escapeHtml(item.jumlah_unit)} unit</td></tr>`).join('');
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+      printWindow.document.open();
+      printWindow.document.write(`<!doctype html><html lang="id"><head><meta charset="UTF-8"><title>${escapeHtml(h.no_spk)}</title><style>
+        @page{size:A4;margin:16mm}*{box-sizing:border-box}body{margin:0;color:#18313a;font:12px Arial,sans-serif}.brand{display:flex;align-items:center;gap:14px;border-bottom:2px solid #117767;padding-bottom:16px}.brand img{width:54px;height:54px;object-fit:contain}.brand-title{font-size:20px;font-weight:700}.brand-subtitle{margin-top:4px;color:#64748b;font-size:10px;letter-spacing:1px;text-transform:uppercase}h1{margin:24px 0 5px;font-size:21px}.muted{color:#64748b}.meta{display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;margin:20px 0;padding:16px;background:#f4f8f7;border-radius:8px}.label{margin-bottom:5px;color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.6px}.value{font-weight:600;line-height:1.5}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#eff6f5;text-align:left;color:#42545a;font-size:9px;text-transform:uppercase;letter-spacing:.5px}th,td{border:1px solid #dce5e5;padding:10px;vertical-align:top;line-height:1.5}.number{text-align:right;white-space:nowrap}.footer{margin-top:20px;color:#64748b;font-size:10px}
+        </style></head><body><header class="brand"><img src="https://aset.ngidengode.com/ngidengode/aset/cmvn9451e093aqx01mdsu0tlu/5f3fd92a80cabe881e48de1b.webp" alt="logo berjaya"><div><div class="brand-title">Surat Perintah Kerja</div><div class="brand-subtitle">Pembuatan panel</div></div></header><h1>${escapeHtml(h.no_spk)}</h1><div class="muted">Status: ${escapeHtml(h.status)}</div><section class="meta"><div><div class="label">Pelanggan</div><div class="value">${escapeHtml(h.nama_pelanggan)}</div></div><div><div class="label">Nama project</div><div class="value">${escapeHtml(h.nama_project)}</div></div><div><div class="label">Lokasi proyek</div><div class="value">${escapeHtml(h.lokasi_proyek || '—')}</div></div><div><div class="label">Tanggal SPK</div><div class="value">${escapeHtml(dateLabel(h.tanggal_spk))}</div></div></section><strong>Rincian item panel</strong><table><thead><tr><th style="width:7%">#</th><th style="width:23%">Jenis panel</th><th>Spesifikasi / keterangan</th><th style="width:15%;text-align:right">Jumlah</th></tr></thead><tbody>${itemRows}</tbody></table><div class="footer">Dokumen dicetak dari Panelworks.</div></body></html>`);
+      printWindow.document.close();
+      setTimeout(() => { printWindow.focus(); printWindow.print(); }, 500);
+    }
+
+    function Button({ children, variant = 'primary', className = '', ...props }) {
+      const styles = {
+        primary: 'bg-teal-600 text-white hover:bg-teal-700 shadow-sm',
+        secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50',
+        ghost: 'text-slate-600 hover:bg-slate-100',
+        danger: 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+      };
+      return <button className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]} ${className}`} {...props}>{children}</button>;
+    }
+
+    function Toast({ toast, onClose }) {
+      useEffect(() => {
+        if (!toast) return;
+        const timer = setTimeout(onClose, 3800);
+        return () => clearTimeout(timer);
+      }, [toast, onClose]);
+      if (!toast) return null;
+      return <div className={`fixed right-5 top-5 z-[100] flex max-w-sm items-start gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl fade-in ${toast.type === 'error' ? 'border-rose-200' : 'border-teal-100'}`}>
+        <span className={`mt-0.5 ${toast.type === 'error' ? 'text-rose-600' : 'text-teal-600'}`}>{icon(toast.type === 'error' ? 'error' : 'check_circle')}</span>
+        <div className="flex-1 text-sm font-medium text-slate-700">{toast.message}</div>
+        <button onClick={onClose} className="text-slate-400">{icon('close', 'text-[18px]')}</button>
+      </div>;
+    }
+
+    function Spinner({ text = 'Memuat data...' }) {
+      return <div className="flex items-center justify-center gap-3 py-16 text-sm text-slate-500"><span className="material-symbols-outlined spin">progress_activity</span>{text}</div>;
+    }
+
+    function LoginView({ onLogin, busy, error }) {
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const submit = (e) => { e.preventDefault(); onLogin(email.trim(), password); };
+      return <div className="min-h-screen bg-white">
+        <header className="absolute z-10 flex w-full items-center justify-between px-6 py-5 md:px-12">
+          <div className="flex items-center gap-3 text-white">
+            <img src="https://aset.ngidengode.com/ngidengode/aset/cmvn9451e093aqx01mdsu0tlu/5f3fd92a80cabe881e48de1b.webp" alt="logo berjaya" className="h-10 w-10 rounded-xl object-contain"/>
+            <div><div className="font-display text-lg font-bold tracking-tight">Panelworks</div><div className="text-[10px] font-semibold uppercase tracking-[.19em] text-white/55">Workshop operations</div></div>
+          </div>
+          <div className="hidden items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-white/75 md:flex">{icon('lock', 'text-[16px]')} Admin access only</div>
+        </header>
+        <main className="hero-bg login-grid relative min-h-screen overflow-hidden px-5 pb-12 pt-28 md:px-12 md:pt-32">
+          <div className="pointer-events-none absolute -right-24 top-36 h-96 w-96 rounded-full border border-white/[.06]"></div>
+          <div className="pointer-events-none absolute -right-8 top-52 h-64 w-64 rounded-full border border-white/[.08]"></div>
+          <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_.75fr] lg:gap-20">
+            <section className="max-w-2xl text-white">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[.16em] text-white/90 backdrop-blur-md">
+                {icon('verified_user', 'text-[15px] text-emerald-300')} Workshop management, made clear
+              </div>
+              <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-[-.04em] sm:text-5xl lg:text-[62px]">Setiap panel.<br/><span className="text-emerald-300">Tercatat dengan pasti.</span></h1>
+              <p className="mt-6 max-w-xl text-base leading-7 text-white/70 md:text-lg">Kelola surat perintah kerja, spesifikasi panel, dan progres produksi dalam satu ruang kerja yang rapi.</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <a href="#admin-login" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-ink shadow-lg transition hover:-translate-y-0.5">{icon('arrow_forward', 'text-[18px]')} Masuk ke workspace</a>
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-3 text-sm text-white/75">{icon('shield_lock', 'text-[18px]')} Data operasional terlindungi</div>
+              </div>
+              <div className="mt-11 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['description', 'SPK terstruktur', 'Header dan item panel dalam satu dokumen'],
+                  ['tune', 'Progres terkendali', 'Lacak dari order baru hingga pengiriman'],
+                  ['inventory_2', 'Multi-item panel', 'Spesifikasi dan unit tiap jenis panel']
+                ].map(([ic, title, desc]) => <div key={title} className="glass rounded-2xl p-4">
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-300/15 text-emerald-200">{icon(ic)}</div>
+                  <div className="text-sm font-semibold">{title}</div><div className="mt-1 text-xs leading-5 text-white/60">{desc}</div>
+                </div>)}
+              </div>
+            </section>
+            <section id="admin-login" className="mx-auto w-full max-w-md scroll-mt-8">
+              <div className="rounded-[28px] border border-white/70 bg-white p-7 shadow-[0_30px_90px_rgba(0,0,0,.24)] sm:p-9">
+                <div className="mb-7 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">{icon('person', 'text-[24px]')}</div>
+                  <div><p className="text-xs font-bold uppercase tracking-[.12em] text-teal-700">Admin workspace</p><h2 className="mt-0.5 font-display text-2xl font-bold tracking-tight text-ink">Selamat datang</h2></div>
+                </div>
+                <p className="mb-6 text-sm leading-6 text-slate-500">Masuk untuk mengelola SPK dan aktivitas produksi panel Anda.</p>
+                <form onSubmit={submit} className="space-y-4">
+                  <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-700">Email admin</span>
+                    <div className="relative"><span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">{icon('mail', 'text-[19px]')}</span><input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@perusahaan.com" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-800 placeholder:text-slate-400"/></div>
+                  </label>
+                  <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-700">Password</span>
+                    <div className="relative"><span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">{icon('key', 'text-[19px]')}</span><input required type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Masukkan password" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-800 placeholder:text-slate-400"/></div>
+                  </label>
+                  {error && <div className="rounded-xl border border-rose-100 bg-rose-50 px-3.5 py-3 text-sm text-rose-700">{error}</div>}
+                  <Button type="submit" disabled={busy} className="mt-2 w-full rounded-xl py-3.5">{busy ? <>{icon('progress_activity', 'spin')} Memverifikasi...</> : <>Masuk ke dashboard {icon('arrow_forward', 'text-[18px]')}</>}</Button>
+                </form>
+                <div className="mt-5 rounded-xl bg-slate-50 p-3.5 text-xs leading-5 text-slate-500"><span className="font-semibold text-slate-700">Akses awal:</span> admin@panelworks.local / Panel123!</div>
+                <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">{icon('lock', 'text-[14px]')} Akses khusus administrator</div>
+              </div>
+              <p className="mt-5 text-center text-xs text-white/50">Panelworks · Sistem pengelolaan SPK produksi</p>
+            </section>
+          </div>
+        </main>
+      </div>;
+    }
+
+    function Sidebar({ view, setView, user, onLogout, mobileOpen, setMobileOpen }) {
+      const links = [
+        { id: 'dashboard', label: 'Dashboard', icon: 'grid_view' },
+        { id: 'spk', label: 'Daftar SPK', icon: 'description' },
+
+      ];
+      return <>
+        {mobileOpen && <div className="fixed inset-0 z-30 bg-ink/40 lg:hidden" onClick={() => setMobileOpen(false)}></div>}
+        <aside className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="flex h-[78px] items-center gap-3 border-b border-slate-100 px-6">
+            <img src="https://aset.ngidengode.com/ngidengode/aset/cmvn9451e093aqx01mdsu0tlu/5f3fd92a80cabe881e48de1b.webp" alt="logo berjaya" className="h-10 w-10 rounded-xl object-contain"/>
+            <div><div className="font-display text-lg font-bold tracking-tight text-ink">Panelworks</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-400">Production desk</div></div>
+            <button className="ml-auto text-slate-400 lg:hidden" onClick={() => setMobileOpen(false)}>{icon('close')}</button>
+          </div>
+          <div className="px-4 pt-7">
+            <div className="px-3 pb-3 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">Workspace</div>
+            <nav className="space-y-1">
+              {links.map(item => <button key={item.id} onClick={() => { setView(item.id); setMobileOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition ${view === item.id ? 'bg-teal-50 text-teal-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}>
+                {icon(item.icon, 'text-[20px]')} {item.label}
+                {view === item.id && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-teal-600"></span>}
+              </button>)}
+            </nav>
+          </div>
+          <div className="mt-auto p-4">
+            <div className="mb-4 rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-800">{initials(user?.name)}</div>
+                <div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-800">{user?.name || 'Administrator'}</div><div className="truncate text-xs text-slate-500">Administrator</div></div>
+              </div>
+            </div>
+            <button onClick={onLogout} className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-500 hover:bg-rose-50 hover:text-rose-700">{icon('logout', 'text-[19px]')} Keluar</button>
+          </div>
+        </aside>
+      </>;
+    }
+
+    function Topbar({ view, user, setMobileOpen }) {
+      const titles = { dashboard: ['Dashboard', 'Ringkasan aktivitas workshop Anda'], spk: ['Daftar SPK', 'Kelola seluruh surat perintah kerja'], customers: ['Master Pelanggan', 'Kelola data pelanggan dan kontak'] };
+      const [title, subtitle] = titles[view] || titles.dashboard;
+      return <header className="sticky top-0 z-20 flex h-[78px] items-center justify-between border-b border-slate-200/80 bg-white/90 px-5 backdrop-blur-xl md:px-8">
+        <div className="flex items-center gap-3">
+          <button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" onClick={() => setMobileOpen(true)}>{icon('menu')}</button>
+          <div><h1 className="font-display text-xl font-bold tracking-tight text-ink">{title}</h1><p className="hidden text-xs text-slate-500 sm:block">{subtitle}</p></div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 sm:flex">{icon('calendar_today', 'text-[15px]')} {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-800">{initials(user?.name)}</div>
+        </div>
+      </header>;
+    }
+
+    function StatCard({ label, value, note, iconName, tint = 'teal' }) {
+      const tints = { teal: 'bg-teal-50 text-teal-700', blue: 'bg-blue-50 text-blue-700', amber: 'bg-amber-50 text-amber-700', violet: 'bg-violet-50 text-violet-700' };
+      return <div className="rounded-2xl border border-slate-200/80 bg-white p-5 panel-shadow">
+        <div className="flex items-start justify-between"><div className="text-sm font-medium text-slate-500">{label}</div><div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tints[tint]}`}>{icon(iconName)}</div></div>
+        <div className="mt-5 font-display text-3xl font-bold tracking-tight text-ink">{value}</div>
+        <div className="mt-1 text-xs text-slate-400">{note}</div>
+      </div>;
+    }
+
+    function DashboardView({ data, rows, loading, setView, onNew, onDetail, refresh }) {
+      const recent = rows.slice(0, 5);
+      const statusColors = { Baru: 'bg-sky-500', Proses: 'bg-amber-500', Selesai: 'bg-emerald-500', Dikirim: 'bg-violet-500' };
+      return <div className="fade-in space-y-6">
+        <section className="hero-bg relative overflow-hidden rounded-[26px] px-6 py-7 text-white md:px-9 md:py-8">
+          <div className="absolute -right-10 -top-20 h-64 w-64 rounded-full border border-white/10"></div><div className="absolute right-10 top-5 h-36 w-36 rounded-full border border-white/10"></div>
+          <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-center">
+            <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.15em] text-white/80">{icon('space_dashboard', 'text-[15px]')} OPERATIONS OVERVIEW</div>
+              <h2 className="font-display text-3xl font-semibold tracking-tight md:text-[34px]">Selamat bekerja.</h2><p className="mt-2 max-w-lg text-sm leading-6 text-white/65">Pantau setiap order panel dan jaga progres produksi tetap berjalan sesuai rencana.</p></div>
+            <Button onClick={onNew} className="w-fit rounded-full bg-white px-5 py-3 text-ink hover:bg-emerald-50">{icon('add')} Buat SPK baru</Button>
+          </div>
+        </section>
+        {loading ? <Spinner /> : <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="Total SPK" value={data?.totalSPK || 0} note="Semua order tercatat" iconName="description" tint="teal"/>
+            <StatCard label="Total unit panel" value={data?.totalPanel || 0} note="Akumulasi unit dalam SPK" iconName="inventory_2" tint="blue"/>
+            <StatCard label="Sedang diproses" value={data?.statusCounts?.Proses || 0} note="Order aktif di workshop" iconName="engineering" tint="amber"/>
+            <StatCard label="Selesai dikirim" value={data?.statusCounts?.Dikirim || 0} note="Order telah diserahkan" iconName="local_shipping" tint="violet"/>
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[.85fr_1.5fr]">
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 panel-shadow md:p-6">
+              <div className="flex items-center justify-between"><div><h3 className="font-display text-lg font-bold text-ink">Status pekerjaan</h3><p className="mt-1 text-xs text-slate-500">Sebaran SPK berdasarkan progres</p></div>{icon('donut_large', 'text-teal-600')}</div>
+              <div className="mt-6 space-y-4">{STATUS.map(status => {
+                const count = data?.statusCounts?.[status] || 0;
+                const total = data?.totalSPK || 0;
+                const pct = total ? Math.round(count / total * 100) : 0;
+                return <div key={status}><div className="mb-2 flex items-center justify-between text-xs"><div className="flex items-center gap-2 font-semibold text-slate-700"><span className={`h-2 w-2 rounded-full ${statusColors[status]}`}></span>{status}</div><span className="text-slate-500">{count} SPK <span className="ml-1 text-slate-400">· {pct}%</span></span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${statusColors[status]} transition-all`} style={{ width: `${pct}%` }}></div></div></div>;
+              })}</div>
+              <button onClick={() => setView('spk')} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">Lihat semua SPK {icon('arrow_forward', 'text-[16px]')}</button>
+            </section>
+            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white panel-shadow">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5 md:px-6"><div><h3 className="font-display text-lg font-bold text-ink">SPK terbaru</h3><p className="mt-1 text-xs text-slate-500">Order yang terakhir dibuat</p></div><button onClick={() => setView('spk')} className="text-xs font-bold text-teal-700 hover:text-teal-800">Semua SPK →</button></div>
+              <RecentTable rows={recent} onDetail={onDetail} />
+              {!recent.length && !loading && <div className="px-6 py-12 text-center text-sm text-slate-400">Belum ada SPK. Buat order pertama Anda.</div>}
+            </section>
+          </div>
+        </>}
+      </div>;
+    }
+
+    function StatusBadge({ status }) {
+      const style = { Baru: 'bg-sky-50 text-sky-700 ring-sky-100', Proses: 'bg-amber-50 text-amber-700 ring-amber-100', Selesai: 'bg-emerald-50 text-emerald-700 ring-emerald-100', Dikirim: 'bg-violet-50 text-violet-700 ring-violet-100' };
+      return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${style[status] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}><span className="h-1.5 w-1.5 rounded-full bg-current"></span>{status}</span>;
+    }
+
+    function RecentTable({ rows, onDetail }) {
+      return <div className="overflow-x-auto scrollbar"><table className="w-full min-w-[600px] text-left">
+        <thead className="bg-slate-50/80 text-[10px] font-bold uppercase tracking-[.1em] text-slate-400"><tr><th className="px-6 py-3">Nomor SPK</th><th className="px-4 py-3">Pelanggan / Project</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3">Status</th><th className="px-5 py-3"></th></tr></thead>
+        <tbody className="divide-y divide-slate-100">{rows.map(row => <tr key={row.id} className="hover:bg-slate-50/70">
+          <td className="px-6 py-4"><div className="text-xs font-bold text-ink">{row.no_spk}</div><div className="mt-1 text-[11px] text-slate-400">{row.total_item} jenis · {row.total_unit} unit</div></td>
+          <td className="px-4 py-4"><div className="max-w-[180px] truncate text-xs font-semibold text-slate-700">{row.nama_pelanggan}</div><div className="mt-1 max-w-[180px] truncate text-[11px] text-slate-400">{row.nama_project}{row.lokasi_proyek ? ` · ${row.lokasi_proyek}` : ''}</div></td>
+          <td className="px-4 py-4 text-xs text-slate-500">{dateLabel(row.tanggal_spk)}</td><td className="px-4 py-4"><StatusBadge status={row.status}/></td>
+          <td className="px-5 py-4 text-right"><button onClick={() => onDetail(row.id)} className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-700">{icon('arrow_outward', 'text-[18px]')}</button></td>
+        </tr>)}</tbody>
+      </table></div>;
+    }
+
+    function SpkView({ rows, loading, filters, setFilters, onSearch, onNew, onDetail, onEdit, onDelete, onStatus }) {
+      const [query, setQuery] = useState('');
+      const filtered = useMemo(() => rows.filter(r => `${r.no_spk} ${r.nama_pelanggan} ${r.nama_project}`.toLowerCase().includes(query.toLowerCase())), [rows, query]);
+      return <div className="fade-in space-y-5">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div><h2 className="font-display text-2xl font-bold tracking-tight text-ink">Semua SPK</h2><p className="mt-1 text-sm text-slate-500">Kelola order dan detail item pembuatan panel.</p></div>
+          <Button onClick={onNew}>{icon('add')} Buat SPK</Button>
+        </div>
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 panel-shadow md:p-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
+            <label className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon('search', 'text-[19px]')}</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari nomor, pelanggan, project..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-xs"/></label>
+            <select value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-600"><option value="">Semua status</option>{STATUS.map(s => <option key={s}>{s}</option>)}</select>
+            <input value={filters.nama_pelanggan} onChange={e => setFilters({ ...filters, nama_pelanggan: e.target.value })} placeholder="Filter nama pelanggan" className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs text-slate-600"/>
+            <div className="flex gap-2"><input type="date" value={filters.tanggal_awal} onChange={e => setFilters({ ...filters, tanggal_awal: e.target.value })} className="min-w-0 w-1/2 rounded-xl border border-slate-200 px-2.5 py-2.5 text-[11px] text-slate-600" title="Dari tanggal"/><input type="date" value={filters.tanggal_akhir} onChange={e => setFilters({ ...filters, tanggal_akhir: e.target.value })} className="min-w-0 w-1/2 rounded-xl border border-slate-200 px-2.5 py-2.5 text-[11px] text-slate-600" title="Sampai tanggal"/></div>
+            <Button variant="secondary" onClick={onSearch} className="px-3">{icon('filter_list')} Filter</Button>
+          </div>
+        </section>
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white panel-shadow">
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div className="text-sm font-bold text-ink">Daftar pekerjaan <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filtered.length}</span></div><button onClick={onSearch} className="text-xs font-semibold text-slate-400 hover:text-teal-700">{icon('refresh', 'text-[16px]')} Segarkan</button></div>
+          {loading ? <Spinner /> : filtered.length ? <div className="overflow-x-auto scrollbar"><table className="w-full min-w-[900px] text-left">
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-[.1em] text-slate-400"><tr><th className="px-5 py-3.5">No. SPK / Tanggal</th><th className="px-4 py-3.5">Pelanggan</th><th className="px-4 py-3.5">Nama project</th><th className="px-4 py-3.5">Panel / Unit</th><th className="px-4 py-3.5">Status</th><th className="px-5 py-3.5 text-right">Aksi</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">{filtered.map(row => <tr key={row.id} className="group hover:bg-slate-50/70">
+              <td className="px-5 py-4"><div className="text-xs font-bold text-ink">{row.no_spk}</div><div className="mt-1 text-[11px] text-slate-400">{dateLabel(row.tanggal_spk)}</div></td>
+              <td className="px-4 py-4"><div className="text-xs font-semibold text-slate-700">{row.nama_pelanggan}</div></td>
+              <td className="px-4 py-4"><div className="max-w-[190px] truncate text-xs text-slate-600">{row.nama_project}</div>{row.lokasi_proyek && <div className="mt-1 max-w-[190px] truncate text-[11px] text-slate-400">{row.lokasi_proyek}</div>}</td>
+              <td className="px-4 py-4"><div className="text-xs font-semibold text-slate-700">{row.total_unit} unit</div><div className="mt-1 text-[11px] text-slate-400">{row.total_item} jenis panel</div></td>
+              <td className="px-4 py-4"><select value={row.status} onChange={e => onStatus(row.id, e.target.value)} className="rounded-full border-0 bg-transparent py-1 pl-1 pr-6 text-xs font-semibold text-slate-600 focus:ring-0"><option>Baru</option><option>Proses</option><option>Selesai</option><option>Dikirim</option></select></td>
+              <td className="px-5 py-4"><div className="flex justify-end gap-1"><button title="Lihat detail" onClick={() => onDetail(row.id)} className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-700">{icon('visibility', 'text-[18px]')}</button><button title="Edit SPK" onClick={() => onEdit(row.id)} className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-700">{icon('edit', 'text-[18px]')}</button><button title="Hapus SPK" onClick={() => onDelete(row)} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700">{icon('delete', 'text-[18px]')}</button></div></td>
+            </tr>)}</tbody>
+          </table></div> : <div className="px-6 py-16 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">{icon('description', 'text-[24px]')}</div><div className="mt-3 text-sm font-semibold text-slate-700">Belum ada SPK ditemukan</div><div className="mt-1 text-xs text-slate-400">Ubah filter pencarian atau buat SPK baru.</div></div>}
+        </section>
+      </div>;
+    }
+
+    function CustomerView({ customers, loading, onSave, onDelete }) {
+      const [modal, setModal] = useState(null);
+      const [query, setQuery] = useState('');
+      const filtered = useMemo(() => customers.filter(c => `${c.nama} ${c.kontak}`.toLowerCase().includes(query.toLowerCase())), [customers, query]);
+      return <div className="fade-in space-y-5">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h2 className="font-display text-2xl font-bold tracking-tight text-ink">Master Pelanggan</h2><p className="mt-1 text-sm text-slate-500">Simpan data pelanggan untuk digunakan berulang pada SPK.</p></div><Button onClick={() => setModal({})}>{icon('person_add')} Tambah pelanggan</Button></div>
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white panel-shadow">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between md:px-5"><div className="text-sm font-bold text-ink">Daftar pelanggan <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{filtered.length}</span></div><div className="relative w-full sm:max-w-xs"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon('search', 'text-[18px]')}</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari nama atau kontak..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-xs"/></div></div>
+          {loading ? <Spinner /> : filtered.length ? <div className="overflow-x-auto"><table className="w-full min-w-[580px] text-left"><thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-[.1em] text-slate-400"><tr><th className="px-6 py-3.5">Nama pelanggan</th><th className="px-4 py-3.5">Kontak</th><th className="px-4 py-3.5">ID pelanggan</th><th className="px-5 py-3.5 text-right">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{filtered.map(c => <tr key={c.id} className="hover:bg-slate-50/70"><td className="px-6 py-4"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-xs font-bold text-teal-700">{initials(c.nama)}</div><div className="text-sm font-semibold text-slate-700">{c.nama}</div></div></td><td className="px-4 py-4 text-sm text-slate-500">{c.kontak || '—'}</td><td className="px-4 py-4 font-mono text-[10px] text-slate-400">{String(c.id).slice(0, 12)}</td><td className="px-5 py-4"><div className="flex justify-end gap-1"><button onClick={() => setModal(c)} className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-700">{icon('edit', 'text-[18px]')}</button><button onClick={() => onDelete(c)} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700">{icon('delete', 'text-[18px]')}</button></div></td></tr>)}</tbody></table></div> : <div className="px-6 py-16 text-center text-sm text-slate-400">Belum ada pelanggan terdaftar.</div>}
+        </section>
+        {modal && <CustomerModal customer={modal} onClose={() => setModal(null)} onSave={async (nama, kontak) => { await onSave(modal.id, nama, kontak); setModal(null); }} />}
+      </div>;
+    }
+
+    function CustomerModal({ customer, onClose, onSave }) {
+      const [nama, setNama] = useState(customer.nama || '');
+      const [kontak, setKontak] = useState(customer.kontak || '');
+      const [busy, setBusy] = useState(false);
+      const submit = async e => { e.preventDefault(); setBusy(true); try { await onSave(nama.trim(), kontak.trim()); } finally { setBusy(false); } };
+      return <ModalShell title={customer.id ? 'Edit pelanggan' : 'Pelanggan baru'} onClose={onClose}>
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Nama pelanggan" required><input autoFocus required value={nama} onChange={e => setNama(e.target.value)} placeholder="Nama perusahaan / pelanggan" className="form-input w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm"/></Field>
+          <Field label="Kontak" hint="Opsional — nomor telepon atau email"><input value={kontak} onChange={e => setKontak(e.target.value)} placeholder="Contoh: 0812 3456 7890" className="w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm"/></Field>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Batal</Button><Button disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan pelanggan'}</Button></div>
+        </form>
+      </ModalShell>;
+    }
+
+    function Field({ label, required, hint, children }) {
+      return <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-700">{label}{required && <span className="ml-1 text-rose-500">*</span>}</span>{children}{hint && <span className="mt-1.5 block text-[11px] text-slate-400">{hint}</span>}</label>;
+    }
+
+    function ModalShell({ title, onClose, children, wide = false }) {
+      return <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className={`fade-in max-h-[92vh] w-full overflow-y-auto rounded-t-[24px] bg-white shadow-2xl sm:rounded-[24px] ${wide ? 'max-w-4xl' : 'max-w-lg'}`}>
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6"><h3 className="font-display text-lg font-bold text-ink">{title}</h3><button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">{icon('close')}</button></div>
+          <div className="p-5 sm:p-6">{children}</div>
+        </div>
+      </div>;
+    }
+
+    function SpkFormModal({ mode, spkId, onClose, onSaved, notify }) {
+      const [loading, setLoading] = useState(mode === 'edit');
+      const [busy, setBusy] = useState(false);
+      const [noSpk, setNoSpk] = useState('');
+      const [form, setForm] = useState({ tanggal_spk: new Date().toISOString().slice(0,10), nama_pelanggan: '', nama_project: '', lokasi_proyek: '', items: [{ jenis_panel: '', spesifikasi: '', jumlah_unit: 1 }] });
+      useEffect(() => {
+        let active = true;
+        const load = async () => {
+          try {
+            if (mode === 'edit') {
+              const res = await serverCall('getSPKDetail', spkId);
+              if (!res.success) throw new Error(res.message);
+              if (active) setForm({ tanggal_spk: res.data.header.tanggal_spk, nama_pelanggan: res.data.header.nama_pelanggan, nama_project: res.data.header.nama_project, lokasi_proyek: res.data.header.lokasi_proyek || '', items: res.data.items.map(i => ({ ...i, jumlah_unit: Number(i.jumlah_unit) })) });
+              if (active) setNoSpk(res.data.header.no_spk);
+            } else {
+              const res = await serverCall('generateNoSPK');
+              if (res.success && active) setNoSpk(res.data.no_spk);
+            }
+          } catch (err) { if (active) notify(err.message || 'Gagal memuat data SPK.', 'error'); }
+          finally { if (active) setLoading(false); }
+        };
+        load();
+        return () => { active = false; };
+      }, [mode, spkId]);
+      const change = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
+      const changeItem = (index, key, value) => setForm(prev => ({ ...prev, items: prev.items.map((item, i) => i === index ? { ...item, [key]: value } : item) }));
+      const addItem = () => change('items', [...form.items, { jenis_panel: '', spesifikasi: '', jumlah_unit: 1 }]);
+      const removeItem = index => change('items', form.items.filter((_, i) => i !== index));
+      const submit = async e => {
+        e.preventDefault();
+        if (!form.items.length) return notify('Tambahkan minimal satu jenis panel.', 'error');
+        setBusy(true);
+        try {
+          const clean = { ...form, items: form.items.map(i => ({ id: i.id || '', jenis_panel: i.jenis_panel.trim(), spesifikasi: i.spesifikasi.trim(), jumlah_unit: Number(i.jumlah_unit) })) };
+          const res = mode === 'edit' ? await serverCall('updateSPK', spkId, clean) : await serverCall('createSPK', clean);
+          if (!res.success) throw new Error(res.message);
+          notify(res.message || 'SPK berhasil disimpan.');
+          onSaved();
+        } catch (err) { notify(err.message || 'Gagal menyimpan SPK.', 'error'); }
+        finally { setBusy(false); }
+      };
+      const totalUnit = form.items.reduce((sum, item) => sum + (Number(item.jumlah_unit) || 0), 0);
+      return <ModalShell title={mode === 'edit' ? 'Edit SPK' : 'Buat SPK baru'} onClose={onClose} wide>
+        {loading ? <Spinner text="Menyiapkan formulir SPK..." /> : <form onSubmit={submit} className="space-y-6">
+          <div className="grid gap-4 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
+            <Field label="Nomor SPK"><div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 font-mono text-xs font-bold text-teal-700">{noSpk || 'Menghasilkan nomor...'}</div></Field>
+            <Field label="Tanggal SPK" required><input required type="date" value={form.tanggal_spk} onChange={e => change('tanggal_spk', e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm"/></Field>
+            <Field label="Nama pelanggan" required><input required value={form.nama_pelanggan} onChange={e => change('nama_pelanggan', e.target.value)} placeholder="Masukkan nama pelanggan" className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm"/></Field>
+            <Field label="Nama project" required><input required value={form.nama_project} onChange={e => change('nama_project', e.target.value)} placeholder="Contoh: Gedung Kantor A" className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm"/></Field>
+            <Field label="Lokasi proyek"><input value={form.lokasi_proyek} onChange={e => change('lokasi_proyek', e.target.value)} placeholder="Contoh: Jakarta Selatan" className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm"/></Field>
+          </div>
+          <div>
+            <div className="mb-3 flex items-center justify-between"><div><h4 className="text-sm font-bold text-ink">Item panel</h4><p className="mt-1 text-xs text-slate-500">Setiap jenis panel memiliki spesifikasi dan jumlah unit sendiri.</p></div><Button type="button" variant="secondary" onClick={addItem} className="px-3 py-2 text-xs">{icon('add', 'text-[17px]')} Tambah item</Button></div>
+            <div className="space-y-3">{form.items.map((item, index) => <div key={item.id || index} className="rounded-2xl border border-slate-200 p-4">
+              <div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2 text-xs font-bold text-slate-600"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-50 text-[11px] text-teal-700">{String(index + 1).padStart(2, '0')}</span>Panel {index + 1}</div>{form.items.length > 1 && <button type="button" onClick={() => removeItem(index)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600">{icon('delete', 'text-[17px]')}</button>}</div>
+              <div className="grid gap-3 md:grid-cols-[1fr_1.7fr_140px]">
+                <Field label="Jenis panel" required><input required value={item.jenis_panel} onChange={e => changeItem(index, 'jenis_panel', e.target.value)} placeholder="Contoh: LVMDP" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs"/></Field>
+                <Field label="Spesifikasi / keterangan" required><textarea required rows="2" value={item.spesifikasi} onChange={e => changeItem(index, 'spesifikasi', e.target.value)} placeholder="Rating, dimensi, konfigurasi, atau catatan..." className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-xs"/></Field>
+                <Field label="Jumlah (unit)" required><div className="flex items-center rounded-xl border border-slate-200"><button type="button" onClick={() => changeItem(index, 'jumlah_unit', Math.max(1, Number(item.jumlah_unit) - 1))} className="px-3 py-2.5 text-slate-400 hover:text-ink">−</button><input required min="1" type="number" value={item.jumlah_unit} onChange={e => changeItem(index, 'jumlah_unit', e.target.value)} className="w-full min-w-0 border-0 px-1 py-2.5 text-center text-xs focus:ring-0"/><button type="button" onClick={() => changeItem(index, 'jumlah_unit', Number(item.jumlah_unit) + 1)} className="px-3 py-2.5 text-slate-400 hover:text-ink">+</button></div></Field>
+              </div>
+            </div>)}</div>
+            <div className="mt-3 flex justify-end text-xs text-slate-500">Total <span className="ml-1 font-bold text-ink">{form.items.length} jenis panel · {totalUnit} unit</span></div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Batal</Button><Button disabled={busy}>{busy ? <>{icon('progress_activity', 'spin')} Menyimpan...</> : <>{icon('save')} Simpan SPK</>}</Button></div>
+        </form>}
+      </ModalShell>;
+    }
+
+    function DetailModal({ detail, onClose, onEdit, onStatus }) {
+      if (!detail) return null;
+      const h = detail.header;
+      const units = detail.items.reduce((sum, item) => sum + Number(item.jumlah_unit || 0), 0);
+      return <ModalShell title="Detail surat perintah kerja" onClose={onClose} wide>
+        <div className="space-y-5">
+          <div className="hero-bg rounded-2xl p-5 text-white md:p-6">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-white/60">Nomor surat perintah kerja</div><div className="mt-1 font-display text-2xl font-bold">{h.no_spk}</div></div><StatusBadge status={h.status}/></div>
+            <div className="mt-5 grid gap-4 border-t border-white/15 pt-4 sm:grid-cols-4"><div><div className="text-[10px] uppercase tracking-wider text-white/55">Pelanggan</div><div className="mt-1 text-sm font-semibold">{h.nama_pelanggan}</div></div><div><div className="text-[10px] uppercase tracking-wider text-white/55">Nama project</div><div className="mt-1 text-sm font-semibold">{h.nama_project}</div></div><div><div className="text-[10px] uppercase tracking-wider text-white/55">Lokasi proyek</div><div className="mt-1 text-sm font-semibold">{h.lokasi_proyek || '—'}</div></div><div><div className="text-[10px] uppercase tracking-wider text-white/55">Tanggal SPK</div><div className="mt-1 text-sm font-semibold">{dateLabel(h.tanggal_spk)}</div></div></div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-sm font-bold text-ink">Rincian item panel</h4><p className="mt-1 text-xs text-slate-500">{detail.items.length} jenis panel · {units} unit total</p></div><div className="flex items-center gap-2"><label className="text-xs text-slate-500">Status</label><select value={h.status} onChange={e => onStatus(h.id, e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold"><option>Baru</option><option>Proses</option><option>Selesai</option><option>Dikirim</option></select></div></div>
+          <div className="overflow-hidden rounded-2xl border border-slate-200"><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left"><thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400"><tr><th className="px-4 py-3">#</th><th className="px-4 py-3">Jenis panel</th><th className="px-4 py-3">Spesifikasi / keterangan</th><th className="px-4 py-3 text-right">Jumlah</th></tr></thead><tbody className="divide-y divide-slate-100">{detail.items.map((item, i) => <tr key={item.id}><td className="px-4 py-4 text-xs text-slate-400">{String(i + 1).padStart(2, '0')}</td><td className="px-4 py-4 text-xs font-bold text-slate-700">{item.jenis_panel}</td><td className="max-w-sm whitespace-pre-wrap px-4 py-4 text-xs leading-5 text-slate-500">{item.spesifikasi}</td><td className="px-4 py-4 text-right text-xs font-bold text-ink">{item.jumlah_unit} unit</td></tr>)}</tbody></table></div></div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button variant="secondary" onClick={onClose}>Tutup</Button><Button variant="secondary" onClick={() => printSPK(detail)}>{icon('print')} Cetak</Button><Button onClick={() => onEdit(h.id)}>{icon('edit')} Edit SPK</Button></div>
+        </div>
+      </ModalShell>;
+    }
+
+    function ConfirmModal({ title, message, onClose, onConfirm, busy }) {
+      return <ModalShell title={title} onClose={onClose}>
+        <div className="flex gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">{icon('warning')}</div><p className="text-sm leading-6 text-slate-600">{message}</p></div>
+        <div className="mt-6 flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Batal</Button><Button variant="danger" disabled={busy} onClick={onConfirm}>{busy ? 'Menghapus...' : 'Ya, hapus'}</Button></div>
+      </ModalShell>;
+    }
+
+    function App() {
+      const [token, setToken] = useState(() => localStorage.getItem('panelworks_token') || '');
+      const [user, setUser] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('panelworks_user') || 'null'); } catch (e) { return null; }
+      });
+      const [view, setView] = useState('dashboard');
+      const [loginBusy, setLoginBusy] = useState(false);
+      const [loginError, setLoginError] = useState('');
+      const [toast, setToast] = useState(null);
+      const [mobileOpen, setMobileOpen] = useState(false);
+      const [dashboard, setDashboard] = useState(null);
+      const [spkRows, setSpkRows] = useState([]);
+      const [customers, setCustomers] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [customerLoading, setCustomerLoading] = useState(false);
+      const [filters, setFilters] = useState({ status: '', tanggal_awal: '', tanggal_akhir: '', nama_pelanggan: '' });
+      const [spkModal, setSpkModal] = useState(null);
+      const [detail, setDetail] = useState(null);
+      const [confirm, setConfirm] = useState(null);
+      const [actionBusy, setActionBusy] = useState(false);
+
+      const notify = (message, type = 'success') => setToast({ message, type });
+      const handleError = (err) => {
+        const message = err?.message || 'Terjadi kesalahan. Silakan coba kembali.';
+        if (/token|sesi|login/i.test(message)) {
+          localStorage.removeItem('panelworks_token');
+          localStorage.removeItem('panelworks_user');
+          setToken('');
+          setUser(null);
+        }
+        notify(message, 'error');
+      };
+
+      const refreshSPK = async (useFilters = true) => {
+        setLoading(true);
+        try {
+          const res = await serverCall('getSPKList', useFilters ? filters : {});
+          if (!res.success) throw new Error(res.message);
+          setSpkRows(res.data || []);
+        } catch (err) { handleError(err); }
+        finally { setLoading(false); }
+      };
+      const refreshCustomers = async () => {
+        setCustomerLoading(true);
+        try {
+          const res = await serverCall('getPelanggan');
+          if (!res.success) throw new Error(res.message);
+          setCustomers(res.data || []);
+        } catch (err) { handleError(err); }
+        finally { setCustomerLoading(false); }
+      };
+      const refreshDashboard = async () => {
+        try {
+          const res = await serverCall('getDashboard');
+          if (!res.success) throw new Error(res.message);
+          setDashboard(res.data);
+        } catch (err) { handleError(err); }
+      };
+      const refreshAll = async () => { await Promise.all([refreshDashboard(), refreshSPK(false)]); };
+
+      useEffect(() => {
+        if (token) {
+          refreshAll();
+        }
+      }, [token]);
+
+      const doLogin = async (email, password) => {
+        setLoginBusy(true); setLoginError('');
+        try {
+          const res = await serverCall('loginAdmin', email, password);
+          if (!res.success) throw new Error(res.message || 'Email atau password tidak sesuai.');
+          localStorage.setItem('panelworks_token', res.data.token);
+          localStorage.setItem('panelworks_user', JSON.stringify(res.data));
+          setToken(res.data.token); setUser(res.data); setView('dashboard');
+          notify(`Selamat datang, ${res.data.name}.`);
+        } catch (err) { setLoginError(err.message || 'Login gagal.'); }
+        finally { setLoginBusy(false); }
+      };
+      const logout = () => {
+        localStorage.removeItem('panelworks_token'); localStorage.removeItem('panelworks_user');
+        setToken(''); setUser(null); setDashboard(null); setSpkRows([]); setCustomers([]);
+      };
+      const openDetail = async id => {
+        try {
+          const res = await serverCall('getSPKDetail', id);
+          if (!res.success) throw new Error(res.message);
+          setDetail(res.data);
+        } catch (err) { handleError(err); }
+      };
+      const saveCustomer = async (id, nama, kontak) => {
+        try {
+          const res = id ? await serverCall('updatePelanggan', id, nama, kontak) : await serverCall('createPelanggan', nama, kontak);
+          if (!res.success) throw new Error(res.message);
+          notify(res.message || 'Data pelanggan berhasil disimpan.');
+          await refreshCustomers();
+        } catch (err) { handleError(err); throw err; }
+      };
+      const removeCustomer = c => setConfirm({ title: 'Hapus pelanggan?', message: `Pelanggan “${c.nama}” akan dihapus. Pelanggan yang sudah digunakan pada SPK tidak dapat dihapus.`, action: async () => {
+        const res = await serverCall('deletePelanggan', c.id);
+        if (!res.success) throw new Error(res.message);
+        notify(res.message || 'Pelanggan dihapus.'); await refreshCustomers();
+      }});
+      const removeSPK = row => setConfirm({ title: 'Hapus SPK?', message: `SPK ${row.no_spk} beserta seluruh item panel di dalamnya akan dihapus permanen.`, action: async () => {
+        const res = await serverCall('deleteSPK', row.id);
+        if (!res.success) throw new Error(res.message);
+        notify(res.message || 'SPK berhasil dihapus.'); await refreshAll();
+      }});
+      const changeStatus = async (id, status) => {
+        try {
+          const res = await serverCall('updateStatusSPK', id, status);
+          if (!res.success) throw new Error(res.message);
+          notify(res.message || 'Status SPK diperbarui.');
+          await Promise.all([refreshSPK(), refreshDashboard()]);
+          if (detail?.header?.id === id) {
+            const d = await serverCall('getSPKDetail', id);
+            if (d.success) setDetail(d.data);
+          }
+        } catch (err) { handleError(err); }
+      };
+      const completeConfirm = async () => {
+        if (!confirm?.action) return;
+        setActionBusy(true);
+        try { await confirm.action(); setConfirm(null); }
+        catch (err) { handleError(err); }
+        finally { setActionBusy(false); }
+      };
+      const savedSPK = async () => { setSpkModal(null); await refreshAll(); setView('spk'); };
+      const editFromDetail = id => { setDetail(null); setSpkModal({ mode: 'edit', id }); };
+
+      if (!token) return <><LoginView onLogin={doLogin} busy={loginBusy} error={loginError}/><Toast toast={toast} onClose={() => setToast(null)}/></>;
+      return <div className="min-h-screen bg-paper">
+        <Sidebar view={view} setView={setView} user={user} onLogout={logout} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen}/>
+        <div className="min-h-screen lg:pl-[260px]">
+          <Topbar view={view} user={user} setMobileOpen={setMobileOpen}/>
+          <main className="mx-auto max-w-[1500px] p-4 md:p-7 xl:p-8">
+            {view === 'dashboard' && <DashboardView data={dashboard} rows={spkRows} loading={loading} setView={setView} onNew={() => setSpkModal({ mode: 'create' })} onDetail={openDetail} refresh={refreshAll}/>}
+            {view === 'spk' && <SpkView rows={spkRows} loading={loading} filters={filters} setFilters={setFilters} onSearch={() => refreshSPK()} onNew={() => setSpkModal({ mode: 'create' })} onDetail={openDetail} onEdit={id => setSpkModal({ mode: 'edit', id })} onDelete={removeSPK} onStatus={changeStatus}/>}
+
+          </main>
+          <footer className="px-5 pb-6 text-center text-[11px] text-slate-400 lg:pl-8">Panelworks <span className="mx-1">·</span> Production workspace</footer>
+        </div>
+        {spkModal && <SpkFormModal mode={spkModal.mode} spkId={spkModal.id} onClose={() => setSpkModal(null)} onSaved={savedSPK} notify={notify}/>}
+        {detail && <DetailModal detail={detail} onClose={() => setDetail(null)} onEdit={editFromDetail} onStatus={changeStatus}/>}
+        {confirm && <ConfirmModal title={confirm.title} message={confirm.message} onClose={() => setConfirm(null)} onConfirm={completeConfirm} busy={actionBusy}/>}
+        <Toast toast={toast} onClose={() => setToast(null)}/>
+      </div>;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
